@@ -1,30 +1,11 @@
 from sqlalchemy import Column, Integer, String, Text, ForeignKey, Enum, Table
 from sqlalchemy.orm import relationship, sessionmaker, declarative_base
-import enum
+import bcrypt
 
 from create_db import engine
+from enums import TaskStatus, TaskPriority, UserRole
 
 Base = declarative_base()
-
-
-class TaskStatus(enum.Enum):
-    TODO = 1
-    IN_PROGRESS = 2
-    DONE = 3
-
-
-class TaskPriority(enum.Enum):
-    HIGH = 1
-    MEDIUM = 2
-    LOW = 3
-
-
-class UserRole(enum.Enum):
-    PO = "Product Owner"
-    TEAMLEAD = "Team Lead"
-    DEV = "Developer"
-    DESIGNER = "Designer"
-    QA = "Quality Assurance"
 
 
 task_responsible = Table(
@@ -51,11 +32,18 @@ class User(Base):
     passwd = Column(String(100), nullable=False)
     role = Column(Enum(UserRole), nullable=False)
     tasks_responsible = relationship('Task',
-                         secondary=task_responsible,
-                         back_populates='responsible')
+                                     secondary=task_responsible,
+                                     back_populates='responsible')
     tasks_executor = relationship('Task',
-                         secondary=task_executors,
-                         back_populates='executors')
+                                  secondary=task_executors,
+                                  back_populates='executors')
+
+    def set_password(self, password):
+        hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
+        self.passwd = hashed_password.decode('utf-8')
+
+    def check_password(self, password):
+        return bcrypt.checkpw(password.encode('utf-8'), self.passwd.encode('utf-8'))
 
 
 class Task(Base):
@@ -67,8 +55,12 @@ class Task(Base):
     status = Column(Enum(TaskStatus), nullable=False, default=TaskStatus.TODO)
     priority = Column(Enum(TaskPriority), nullable=False, default=TaskPriority.MEDIUM)
 
-    responsible = relationship('User', secondary=task_responsible, back_populates='tasks_responsible')
-    executors = relationship('User', secondary=task_executors, back_populates='tasks_executor')
+    responsible = relationship('User',
+                               secondary=task_responsible,
+                               back_populates='tasks_responsible')
+    executors = relationship('User',
+                             secondary=task_executors,
+                             back_populates='tasks_executor')
 
 
 if __name__ == "__main__":
@@ -79,26 +71,25 @@ if __name__ == "__main__":
     session = Session()
 
     # An example of adding data to tables
-
     new_user1 = User(
         name="Alice",
         email="alice@example.com",
-        passwd="alicepassword",
         role=UserRole.PO
     )
+    new_user1.set_password("alicepassword")
+
     new_user2 = User(
         name="Bob",
         email="bob@example.com",
-        passwd="bobpassword",
         role=UserRole.DEV
     )
+    new_user2.set_password("bobpassword")
+
     new_task = Task(
         name="first task",
         description="desc of first task",
         status=TaskStatus.TODO,
         priority=TaskPriority.MEDIUM,
-        # executors=[new_user2.id],
-        # responsible=new_user1.id
     )
 
     # Saving changes in the database
